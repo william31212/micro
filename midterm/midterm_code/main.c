@@ -346,9 +346,7 @@ void DRV_Printf(char *pFmt, U16 u16Val)
 	}
 }
 
-//左移
 #define BIT(x) (1<<(x))
-
 
 void led(int state) {
     GPIO_PTB_GPIO = ~state;
@@ -366,6 +364,10 @@ uint8 dip_check(int idx)
 	return (dip_read() & BIT(idx)) >> idx;
 }
 
+int rrot(int tmp)
+{
+    return tmp >> 1 | tmp << 16-1;
+}
 
 
 unsigned int index_7LED[8] = {
@@ -383,73 +385,132 @@ unsigned int num[18] = {Number_0, Number_1, Number_2, Number_3, Number_4, Number
 			Number_8, Number_9, Number_A, Number_b, Number_C, Number_d, Number_E, Number_F, Number_Dot, 0x0};
 
 
+int ans_tmp = 0;
+int ans = 0;
+int state = 0;
+
 
 void one2three()
 {
-	int ans = 0;
 	int i = 0;
+	ans = 0;
 	for(i = 0; i < 8; i++)
 	{
 		if(dip_check(i))
-			ans |= BIT(i+8);
+			ans |= BIT(15-i);
 		else
-			ans |= BIT(i);
+			ans |= BIT(7-i);
 	}
-	led(ans);
+
+	if(ans_tmp != ans && ans_tmp != 0)
+	{
+		int ans_2 = ans;
+		for(i = 0; i < 16; i++)
+		{
+			ans_2 = rrot(ans_2);
+			delay1(100000);
+			led(ans_2);
+		}
+	}
+	else
+	{
+		led(ans);
+	}
+	ans_tmp = ans;
 }
+
+int v1 = 0, v0 = 0;
+int v12= 0, v02 = 0;
 
 void four()
 {
-	int ans = 0;
+	v1 = 0, v0 = 0;
 	int i = 0;
+
+	//init
 	for(i = 0; i < 8; i++)
+	{
+		GPIO_PTA_GPIO = index_7LED[i];
+		GPIO_PTD_GPIO = num[17];
+	}
+
+	//v1 input
+	for(i = 0; i <= 3; i++)
 	{
 		if(dip_check(i))
 		{
-			ans |= BIT(i);
+			v0 |= BIT(i);
 		}
 	}
 
-	int cnt = 0;
-	while(ans > 0)
+	//v2 input
+	for(i = 4; i < 8; i++)
 	{
-		GPIO_PTA_GPIO = index_7LED[++cnt];  // 7seg 的哪一格
-		GPIO_PTD_GPIO = num[ans%10]; // 什麼數字
-		ans /= 10;
+		if(dip_check(i))
+		{
+			v1 |= BIT(i-4);
+		}
+	}
+
+	//v1 7,8 is 1
+	v1 |= BIT(2);
+	v1 |= BIT(3);
+
+	//store state
+	v12 = v1;
+	v02 = v0;
+
+	int cnt2 = 0;
+	while(v0 > 0)
+	{
+		if(cnt2 == 2)
+			break;
+		GPIO_PTA_GPIO = index_7LED[cnt2++];
+		GPIO_PTD_GPIO = num[v0%10];
+		v0 /= 10;
 		delay1(100);
 	}
-}
 
+
+	int cnt1 = 2;
+	while(v1 > 0)
+	{
+		GPIO_PTA_GPIO = index_7LED[cnt1++];
+		GPIO_PTD_GPIO = num[v1%10];
+		v1 /= 10;
+		delay1(100);
+	}
+
+
+}
 
 int frame[8];
 int buffer[8];
-int state = 0;
-int state_cnt = 7;
-int pre = -1;
+int idxcnt = 0;
+int pre = 0;
+int flag = 0;
 
 void five()
 {
-	int i = 0, j = 0, k = 0, ans = 0;
-	memset(state,0,sizeof(frame));
+	int i = 0, j = 0, k = 0, idxcnt = 0, ans = v12 * v02 * abs(v12 - v02);
+	memset(frame,-1,sizeof(frame));
 	memset(buffer,0,sizeof(buffer));
 
-	//read_dip_sw
-	for(i = 0; i < 8; i++)
-	{
-		if(dip_check(i))
-		{
-			ans |= BIT(i);
-		}
-	}
-
 	//check_the_swich
+
 	if( pre != ans ){
 		state = 0;
-		state_cnt = 8;
+		flag = 0;
 	}
 	pre = ans;
+	
 
 	int cnt = 0;
+
+	if(ans == 0)
+	{
+		frame[cnt] = 0;
+	}
 	while(ans > 0)
 	{
 		frame[cnt] = ans % 10;
@@ -458,95 +519,58 @@ void five()
 	}
 
 
-	//frame-> 存ans的陣列
-	//buffer-> 存即將要render的值
-	//state0 => 8******* => *8****** => ... => *******8
-	//state1 => 1******8 => *1*****8 => ... => ******18
-	//state2 => 2*****18 => *2****18 => ... => *****218
-	//state3 => *****218 => ****218* => ... => 218*****
-	//state4 => 218*****(lock)
 	if(state == 0)
 	{
-		for(i = 7; i >= 0; i--)
+		for(i = 7; i >= 7; i--)
 		{
-			if(state_cnt == i)
-				buffer[i] = num[frame[state]];
-			else
+			if(frame[idxcnt] >= 0)
+				buffer[i] = num[frame[idxcnt]];
+			else if(frame[idxcnt] == -1)
 				buffer[i] = -1;
 		}
-		if (state_cnt == 0)
-		{
-			state_cnt = 8;
-			state = 1;
-		}
-		state_cnt--;
+		state = 1;
+		
 	}
 	else if (state == 1)
 	{
-		buffer[0] = num[frame[0]];
-		for(i = 7; i >= 1; i--)
+		idxcnt = 1;
+		for(i = 7; i >= 6; i--)
 		{
-			if(state_cnt == i)
-				buffer[i] = num[frame[state]];
-			else
+			if(frame[idxcnt] >= 0)
+				buffer[i] = num[frame[idxcnt]];
+			else if(frame[idxcnt] == -1)
 				buffer[i] = -1;
+			--idxcnt;
 		}
-		if (state_cnt == 1)
-		{
-			state_cnt = 8;
-			state = 2;
-		}
-		state_cnt--;
+		state = 2;
+		
 	}
 	else if (state == 2)
 	{
-		buffer[0] = num[frame[0]];
-		buffer[1] = num[frame[1]];
-		for(i = 7; i >= 2; i--)
+		idxcnt = 2;
+		for(i = 7; i >= 5; i--)
 		{
-			if(state_cnt == i)
-				buffer[i] = num[frame[state]];
-			else
+			if(frame[idxcnt] >= 0)
+				buffer[i] = num[frame[idxcnt]];
+			else if(frame[idxcnt] == -1)
 				buffer[i] = -1;
+			idxcnt--;
 		}
-		if (state_cnt == 2)
-		{
-			state_cnt = 1;
-			state = 3;
-		}
-		state_cnt--;
+		state = 3;
 	}
 	else if (state == 3)
 	{
-		for(i = 0; i < 8; i++)
+		idxcnt = 3;
+		for(i = 7; i >= 4; i--)
 		{
-			if(state_cnt == i)
-			{
-				buffer[i] = num[frame[0]];
-				buffer[i+1] = num[frame[1]];
-				buffer[i+2] = num[frame[2]];
-				i = i+3;
-			}
-			else
-			{
-				buffer[i] = num[17];
-			}
+			if(frame[idxcnt] >= 0)
+				buffer[i] = num[frame[idxcnt]];
+			else if(frame[idxcnt] == -1)
+				buffer[i] = -1;
+			idxcnt--;
 		}
-
-		if(state_cnt == 5)
-		{
-			state = 4;
-			state_cnt = 0;
-		}
-		state_cnt++;
+		state = 3;
 	}
-	else if (state == 4)
-	{
-		buffer[5] = num[frame[0]];
-		buffer[6] = num[frame[1]];
-		buffer[7] = num[frame[2]];
-	}
-
 
 
 	/********************** render_data *********************/
@@ -555,8 +579,16 @@ void five()
 
 	for(i = 0; i < 100; i++)
 	{
-		for(j = 7; j >= 0; j--)
+		for(j = 7; j >= 4; j--)
 		{
+			four();
+			//v0是0的時候要顯示
+			if(v02 == 0)
+			{
+				GPIO_PTA_GPIO = index_7LED[0];
+				GPIO_PTD_GPIO = num[0];
+			}
+
 			if(buffer[j] == -1)
 			{
 				GPIO_PTA_GPIO = index_7LED[j];
@@ -593,23 +625,22 @@ void init()
 	GPIO_PTC_CFG = 0x0000;
 
 	//LED
-	GPIO_PTB_DIR = 0x0000;	//for GPIO
-	GPIO_PTB_CFG = 0xFFFF;	//for push pull
-	GPIO_PTB_PADIN = 0x00;	//for Output
-	GPIO_PTB_GPIO = 0xFFFF; //all dark
+	GPIO_PTB_DIR = 0x0000;
+	GPIO_PTB_CFG = 0xFFFF;
+	GPIO_PTB_PADIN = 0x00;
+	GPIO_PTB_GPIO = 0xFFFF;
 }
 
 
 int main()
 {
+
 	init();
-	DRV_Printf("START\r\n", 0);
 	while(1)
 	{
 		one2three();
 		four();
 		five();
 	}
-	DRV_Printf("END\r\n", 0);
 	return 0;
 }
