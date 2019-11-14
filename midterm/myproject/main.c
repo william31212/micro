@@ -346,7 +346,7 @@ void DRV_Printf(char *pFmt, U16 u16Val)
 	}
 }
 
-//å·¦ç§»
+//¥ª²¾
 #define BIT(x) (1<<(x))
 
 void led(int state) {
@@ -435,8 +435,8 @@ void four()
 	int cnt1 = 5;
 	while(ans1 > 0)
 	{
-		GPIO_PTA_GPIO = index_7LED[++cnt1];  // 7seg çš„å“ªä¸€æ ¼
-		GPIO_PTD_GPIO = num[ans1%10]; // ä»€éº¼æ•¸å­—
+		GPIO_PTA_GPIO = index_7LED[++cnt1];  // 7seg ªº­þ¤@®æ
+		GPIO_PTD_GPIO = num[ans1%10]; // ¤°»ò¼Æ¦r
 		ans1 /= 10;
 		delay1(100);
 	}
@@ -444,8 +444,8 @@ void four()
 	int cnt2 = 7;
 	while(ans2 > 0)
 	{
-		GPIO_PTA_GPIO = index_7LED[++cnt2];  // 7seg çš„å“ªä¸€æ ¼
-		GPIO_PTD_GPIO = num[ans2%10]; // ä»€éº¼æ•¸å­—
+		GPIO_PTA_GPIO = index_7LED[++cnt2];  // 7seg ªº­þ¤@®æ
+		GPIO_PTD_GPIO = num[ans2%10]; // ¤°»ò¼Æ¦r
 		ans2 /= 10;
 		delay1(100);
 	}
@@ -489,8 +489,8 @@ void five()
 	}
 
 
-	//frame-> å­˜ansçš„é™£åˆ—
-	//buffer-> å­˜å³å°‡è¦renderçš„å€¼
+	//frame-> ¦sansªº°}¦C
+	//buffer-> ¦s§Y±N­nrenderªº­È
 	//state0 => 8******* => *8****** => ... => *******8
 	//state1 => 1******8 => *1*****8 => ... => ******18
 	//state2 => 2*****18 => *2****18 => ... => *****218
